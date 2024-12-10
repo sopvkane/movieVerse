@@ -1,0 +1,5 @@
+{"_id":{"$oid":"67288b874d18fd0aec875936"},"title":"Inception","genres":["Sci-Fi","Thriller"],"year":2010,"description":"Updated description","actors":["Leonardo DiCaprio"],"director":"Christopher Nolan","rating":9.0,"release_year":2010,"runtime":148}
+{"_id":{"$oid":"67288b874d18fd0aec875937"},"title":"Interstellar","genres":["Adventure","Sci-Fi","Drama"],"year":2014,"description":"Stars."}
+{"_id":{"$oid":"67288b874d18fd0aec875938"},"title":"The Matrix","genres":["Action","Sci-Fi"],"year":1999,"description":"Reality."}
+{"_id":{"$oid":"67288b884d18fd0aec87593b"},"title":"New Movie","genres":["Drama"],"runtime":120,"actors":["Actor1","Actor2"],"director":"Director1","release_year":2021,"description":"A new movie","rating":7.5}
+{"_id":{"$oid":"67288b884d18fd0aec875950"},"title":"Inception","genres":["Action","Sci-Fi"],"year":2010}
