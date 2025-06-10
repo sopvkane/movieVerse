@@ -21,7 +21,7 @@ def create_app(config_name='development'):
     mongo.init_app(app)
     JWTManager(app)
     limiter.init_app(app)
-    CORS(app)
+    CORS(app, resources={r"/api/*": {"origins": "http://localhost:4200"}})
 
     # Populate the movies database if needed
     with app.app_context():
@@ -29,7 +29,7 @@ def create_app(config_name='development'):
         update_genre_format()  # Call the genre update function here
 
     # Register blueprints with API versioning prefix
-    api_prefix = '/api/v1'
+    api_prefix = '/api/v1.0'
     app.register_blueprint(user_bp, url_prefix=f'{api_prefix}/users')
     app.register_blueprint(movie_bp, url_prefix=f'{api_prefix}/movies')
     app.register_blueprint(review_bp, url_prefix=f'{api_prefix}/movies/')
@@ -39,6 +39,11 @@ def create_app(config_name='development'):
     Swagger(app)
 
     return app
+
+    @app.route('/test_cors')
+    def test_cors():
+        return {"message": "CORS test"}
+
 
 if __name__ == '__main__':
     app = create_app('development')

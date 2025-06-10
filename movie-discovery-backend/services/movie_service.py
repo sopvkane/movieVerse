@@ -4,7 +4,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import linear_kernel
 import pandas as pd  # Import pandas
 from extensions import mongo
-
+import math
 # movie_service.py
 
 import re
@@ -29,7 +29,10 @@ def search_movies(query_params, page=1, per_page=20):
 
     # Genre search with case-insensitive matching
     if "genre" in query_params and query_params["genre"]:
-        query["genre"] = {"$in": [query_params["genre"].strip()]}
+        genre = query_params["genre"].strip()
+        # Use a case-insensitive regex search
+        query["genre"] = {"$regex": f"^{genre}$", "$options": "i"}
+
 
     # Actor search within the cast_name array
     if "actor" in query_params and query_params["actor"]:
@@ -131,6 +134,26 @@ def add_movie(movie_data):
         return None, f"Database error occurred while adding movie: {e}"
 
 
+def sanitize_value(value):
+    if isinstance(value, float):
+        if math.isnan(value) or math.isinf(value):
+            return None
+    elif isinstance(value, list):
+        return [sanitize_value(item) for item in value]
+    elif isinstance(value, dict):
+        return {k: sanitize_value(v) for k, v in value.items()}
+    return value
+
+def sanitize_movie(movie):
+    sanitized = {k: sanitize_value(v) for k, v in movie.items()}
+    # Optionally remove unnecessary fields
+    sanitized.pop("actors", None)
+    sanitized.pop("rating", None)
+    sanitized.pop("release_year", None)
+    sanitized.pop("runtime", None)
+    sanitized.pop("title", None)
+    return sanitized
+
 def get_content_based_recommendations(movie_id):
     """
     Generates content-based recommendations for a given movie ID.
@@ -149,31 +172,62 @@ def get_content_based_recommendations(movie_id):
 
     df = pd.DataFrame(movies)
     
-    df["description"] = df.get("description", "").fillna("")
-    df["genres"] = df["genres"].apply(lambda x: " ".join(x) if isinstance(x, list) else "")
-
-    combined_features = df["description"] + " " + df["genres"]
-
+    # Handle missing fields
+    if "description" in df.columns:
+        df["description"] = df["description"].fillna("")
+    else:
+        df["description"] = ""
+    if "genres" in df.columns:
+        df["genres"] = df["genres"].apply(lambda x: " ".join(x) if isinstance(x, list) else "")
+    else:
+        # Handle the absence of 'genres' column, e.g.:
+        df["genres"] = ""
+    df["director_name"] = df.get("director_name", "").fillna("")
+    df["cast_name"] = df["cast_name"].apply(lambda x: " ".join(x) if isinstance(x, list) else "")
+    
+    # Combine features for TF-IDF
+    combined_features = df["description"] + " " + df["genres"] + " " + df["director_name"] + " " + df["cast_name"]
+    
+    # Initialize TF-IDF Vectorizer
     tfidf = TfidfVectorizer(stop_words="english")
     tfidf_matrix = tfidf.fit_transform(combined_features)
+    
+    # Compute Cosine Similarity Matrix
     cosine_sim = linear_kernel(tfidf_matrix, tfidf_matrix)
-
+    
+    # Create a Series mapping movie IDs to DataFrame indices
     indices = pd.Series(df.index, index=df["_id"]).drop_duplicates()
+    
+    # Get the index of the movie that matches the movie_id
     idx = indices.get(movie_id)
     
     if idx is None:
         return None, "Movie ID not found for recommendation."
-
+    
+    # Get similarity scores for all movies with the current movie
     sim_scores = list(enumerate(cosine_sim[idx]))
-    sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)[1:11]  # Get top 10 similar movies
+    
+    # Sort the movies based on similarity scores in descending order
+    sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
+    
+    # Exclude the first movie (itself) and get the top 10 similar movies
+    sim_scores = sim_scores[1:11]
+    
+    # Get the movie indices
     movie_indices = [i[0] for i in sim_scores]
-
+    
+    # Fetch the recommended movies from the DataFrame
     recommendations = df.iloc[movie_indices].to_dict("records")
     
+    # Convert ObjectId to string and sanitize each recommendation
+    sanitized_recommendations = []
     for rec in recommendations:
         rec["_id"] = str(rec["_id"])
+        sanitized_rec = sanitize_movie(rec)
+        sanitized_recommendations.append(sanitized_rec)
     
-    return recommendations, None
+    return sanitized_recommendations, None
+
 
 def filter_movies(filters):
     """
